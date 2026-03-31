@@ -8,6 +8,7 @@ from mistralai.client import Mistral
 from langchain_core.documents import Document
 from langchain_community.vectorstores import FAISS
 from langchain_mistralai import MistralAIEmbeddings
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 # Charger les variables d'environnement
 load_dotenv()
@@ -46,25 +47,46 @@ def create_and_save_faiss_index(documents):
 
     # Sauvegarde finale
     if vectorstore:
-        dossier_sauvegarde = "./faiss_index"
+        # 1. On récupère le chemin absolu du dossier "src" où se trouve ce script
+        dossier_src = os.path.dirname(os.path.abspath(__file__))
+        
+        # 2. On remonte d'un cran pour atteindre la racine "Projet7"
+        racine_projet = os.path.dirname(dossier_src)
+        
+        # 3. On crée le chemin final, blindé et absolu
+        dossier_sauvegarde = os.path.join(racine_projet, "faiss_index")
+        
         vectorstore.save_local(dossier_sauvegarde)
         print(f"💾 ✅ Index FAISS sauvegardé dans '{dossier_sauvegarde}' !")
 
-def fetch_openagenda_events(agenda_uid, search_term="Strasbourg"):
-    """Récupère les événements d'un agenda spécifique sur OpenAgenda."""
-    
-    url = f"https://api.openagenda.com/v2/agendas/{agenda_uid}/events"
-    
-    # On ajoute la clé dans les paramètres de l'URL
+def get_top_agendas_by_location(location, limit=10):
+    """Récupère dynamiquement les UIDs des meilleurs agendas pour une ville donnée."""
+    url = "https://api.openagenda.com/v2/agendas"
     params = {
-        "search": search_term,
-        "size": 100,
-        "key": open_agenda_api_key 
+        "search": location,
+        "size": limit,
+        "key": open_agenda_api_key
+    }
+    response = requests.get(url, params=params)
+    response.raise_for_status()
+    data = response.json()
+    return [agenda["uid"] for agenda in data.get("agendas", [])]
+
+def fetch_openagenda_events(agenda_uid, search_term=None):
+    url = f"https://api.openagenda.com/v2/agendas/{agenda_uid}/events"
+    date_limite = (datetime.now() - relativedelta(years=1)).strftime("%Y-%m-%d")
+    
+    params = {
+        "size": 100, # On prend le maximum par agenda
+        "key": open_agenda_api_key,
+        "timings[gte]": date_limite 
     }
     
+    # On n'ajoute le filtre de recherche que s'il est précisé
+    if search_term:
+        params["search"] = search_term
+        
     response = requests.get(url, params=params)
-    
-    # Si la requête échoue, ça lèvera une erreur proprement au lieu de planter silencieusement
     response.raise_for_status() 
     
     data = response.json()
@@ -88,48 +110,65 @@ def process_and_filter_events(all_raw_data):
         print(list(all_raw_data[0].keys()))
         print("-" * 30)
 
-    # 2. GESTION DES TEXTES (Sécurisée)
-    titre_col = 'title.fr' if 'title.fr' in df.columns else 'title'
-    desc_col = 'description.fr' if 'description.fr' in df.columns else 'description'
-    long_desc_col = 'longDescription.fr' if 'longDescription.fr' in df.columns else 'longDescription'
-    
-    if long_desc_col not in df.columns:
-        df[long_desc_col] = None
-
-    # Utilisation de .get pour éviter tout plantage si la colonne n'existe vraiment pas
-    df['titre'] = df.get(titre_col, 'Titre inconnu').fillna('Titre inconnu')
-    df['description'] = df.get(long_desc_col, df.get(desc_col, 'Pas de description')).fillna('Pas de description')
-
-    # 3. GESTION DES DATES (Avec rapport de situation)
-    if 'firstTiming' in df.columns:
-        df['date_debut'] = pd.to_datetime(df['firstTiming'], errors='coerce')
-        print("Info : Colonne 'firstTiming' trouvée et utilisée pour les dates.")
-    elif 'dateRange.fr' in df.columns:
-        # Une autre possibilité de l'API OpenAgenda
-        print("Info : Utilisation de 'dateRange.fr' au lieu de firstTiming.")
-        df['date_debut'] = df['dateRange.fr'] 
-    elif 'timings' in df.columns:
-        df['date_debut'] = df['timings'].apply(lambda x: x[0]['begin'] if isinstance(x, list) and len(x) > 0 else None)
-        df['date_debut'] = pd.to_datetime(df['date_debut'], errors='coerce')
-        print("Info : Colonne 'timings' (ancien format) trouvée et utilisée.")
+# 2. GESTION DES TEXTES (Sécurisée)
+    # --- Pour le titre ---
+    if 'title.fr' in df.columns:
+        df['titre'] = df['title.fr'].fillna('Titre inconnu')
+    elif 'title' in df.columns:
+        df['titre'] = df['title'].fillna('Titre inconnu')
     else:
-        df['date_debut'] = None
-        print("⚠️ AVERTISSEMENT : AUCUNE colonne de date connue n'a été trouvée dans les données !")
+        df['titre'] = 'Titre inconnu'
 
-    # 4. LE FILTRAGE (On compte les morts 😅)
-    nb_avant_titre = len(df)
-    df = df[df['titre'] != 'Titre inconnu']
-    nb_apres_titre = len(df)
-    print(f"🗑️ Filtrage des titres : {nb_avant_titre - nb_apres_titre} événements supprimés car 'Titre inconnu'.")
+    # --- Pour la description ---
+    # On commence par la description longue
+    if 'longDescription.fr' in df.columns:
+        df['description'] = df['longDescription.fr']
+    elif 'longDescription' in df.columns:
+        df['description'] = df['longDescription']
+    else:
+        df['description'] = None # On crée la colonne vide
+        
+    # On bouche les trous avec la description courte si elle existe
+    if 'description.fr' in df.columns:
+        df['description'] = df['description'].fillna(df['description.fr'])
+    elif 'description' in df.columns:
+        df['description'] = df['description'].fillna(df['description'])
+        
+    # S'il y a toujours des trous, on met notre texte par défaut
+    df['description'] = df['description'].fillna('Pas de description')
 
-    nb_avant_date = len(df)
-    df = df.dropna(subset=['date_debut'])
-    nb_apres_date = len(df)
-    print(f"🗑️ Filtrage des dates : {nb_avant_date - nb_apres_date} événements supprimés car aucune date valide n'a été lue.")
 
-    print(f"✅ Reste final : {len(df)} événements conservés pour vectorisation.")
-    print("--- 🏁 FIN DU DEBUG ---\n")
+# 3. GESTION DES DATES (L'API a déjà fait le tri < 1 an, on extrait juste le texte pour Mistral)
+    if 'firstTiming.begin' in df.columns:
+        # Si Pandas a aplati le dictionnaire
+        df['date_debut'] = df['firstTiming.begin']
+    elif 'firstTiming' in df.columns:
+        # Si c'est resté un dictionnaire
+        df['date_debut'] = df['firstTiming'].apply(lambda x: x.get('begin') if isinstance(x, dict) else x)
+    elif 'dateRange' in df.columns:
+        df['date_debut'] = df['dateRange']
+    else:
+        df['date_debut'] = 'Récemment'
+
+    # 4. LE FILTRAGE SIMPLE
+    nb_avant = len(df)
     
+    # On supprime juste les erreurs de saisie (sans titre)
+    df = df[df['titre'] != 'Titre inconnu']
+    
+    nb_apres = len(df)
+    print(f"🗑️ Filtrage de qualité : {nb_avant - nb_apres} événements supprimés.")
+    print(f"✅ Reste final : {len(df)} événements récents conservés.")
+    
+    # 5. GESTION DU LIEU (Nom du lieu + Ville)
+    if 'location.name' in df.columns and 'location.city' in df.columns:
+        # On combine le nom de la salle et la ville : "Le Zénith (Strasbourg)"
+        df['lieu'] = df['location.name'].fillna('') + " (" + df['location.city'].fillna('') + ")"
+    elif 'location.city' in df.columns:
+        df['lieu'] = df['location.city']
+    else:
+        df['lieu'] = "Alsace"
+
     return df
 
 def get_mistral_embeddings(textes):
@@ -152,44 +191,50 @@ def prepare_documents_by_event(df) -> list[Document]:
     for index, row in df.iterrows():
         titre = str(row.get('titre', '')).strip()
         description = str(row.get('description', '')).strip()
-        date_str = str(row.get('date', 'Inconnue')).strip()
+        date_str = str(row.get('date_debut', 'Inconnue')).strip()
+        # --- ON RÉCUPÈRE LE LIEU ICI ---
+        lieu = str(row.get('lieu', 'Lieu non précisé')).strip()
 
-        # Construction du texte
-        texte_complet = f"Titre : {titre}\nDate : {date_str}\nDescription : {description}".strip()
+        # On ajoute le Lieu dans le texte complet
+        texte_complet = f"Titre : {titre}\nDate : {date_str}\nLieu : {lieu}\nDescription : {description}".strip()
 
-        # --- SÉCURITÉS ANTI-ERREUR 400 ---
-        
-        # 1. On ignore si le texte est vide ou trop court (moins de 10 caractères)
         if len(texte_complet) < 10:
             continue 
 
-        # 2. On tronque si c'est trop long (Mistral limite à environ 16k tokens, 
-        # on va limiter à 10 000 caractères par sécurité, ce qui est déjà énorme)
         if len(texte_complet) > 10000:
             texte_complet = texte_complet[:10000] + "..."
 
-        metadata = {"titre": titre, "date": date_str}
+        # On l'ajoute aussi dans les métadonnées pour être propre
+        metadata = {"titre": titre, "date": date_str, "lieu": lieu}
         documents.append(Document(page_content=texte_complet, metadata=metadata))
         
     print(f"✅ Filtrage terminé : {len(documents)} documents valides prêts pour Mistral.")
     return documents
 
+    
 if __name__ == "__main__":
-    # Liste de plusieurs UIDs d'agendas de Strasbourg/Grand Est
-    # (Tu peux en ajouter autant que tu veux !)
-    AGENDA_UIDS = ["35291330", "65745437", "82229342", "73123154", "10748715", "97272582"] 
-    
-    print("📥 Récupération des données multi-agendas...")
+    # Liste des villes pour couvrir l'Alsace
+    VILLES_ALSACE = ["Strasbourg", "Colmar", "Mulhouse", "Sélestat", "Haguenau"]
     all_raw_data = []
-    
-    # On boucle sur chaque UID pour accumuler les événements
-    for uid in AGENDA_UIDS:
-        print(f"   -> Interrogation de l'agenda {uid}...")
+    all_agenda_uids = set()
+
+    print(f"🔍 Recherche des agendas les plus actifs...")
+    for ville in VILLES_ALSACE:
+        # On demande les 10 meilleurs agendas par ville
+        uids = get_top_agendas_by_location(ville, limit=15) 
+        all_agenda_uids.update(uids)
+
+    print(f"✅ {len(all_agenda_uids)} agendas trouvés. Extraction des événements...")
+
+    for uid in all_agenda_uids:
         try:
-            events = fetch_openagenda_events(uid, "Strasbourg")
+            # IMPORTANT : on passe search_term=None pour ne pas filtrer par mot-clé
+            # On veut TOUT ce que l'agenda propose de récent
+            events = fetch_openagenda_events(uid, search_term=None) 
             all_raw_data.extend(events)
+            print(f"   -> Agenda {uid} : {len(events)} événements ajoutés.")
         except Exception as e:
-            print(f"   ⚠️ Erreur sur l'agenda {uid} : {e}")
+            continue
             
     print(f"✅ {len(all_raw_data)} événements bruts récupérés au total.")
     
@@ -198,9 +243,21 @@ if __name__ == "__main__":
     print(f"✅ {len(df_clean)} événements conservés après filtrage.")
     
     print("📦 3. Création des Documents LangChain (1 événement = 1 Document)...")
-    documents = prepare_documents_by_event(df_clean)
+    documents_initiaux = prepare_documents_by_event(df_clean)
     
-    if documents:
-            # On saute le test manuel et on lance la création de la BDD
-            print("🚀 4. Création de la base de données FAISS (cela peut prendre 1-2 min)...")
-            create_and_save_faiss_index(documents)
+    if documents_initiaux:
+        print("✂️ 3.5 Découpage (Chunking) des textes longs...")
+        # On configure le découpeur : morceaux de 1000 caractères, avec 100 caractères 
+        # de chevauchement (overlap) pour ne pas couper un mot ou une idée en deux.
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1000,
+            chunk_overlap=100
+        )
+        
+        # On applique le découpage à nos documents
+        documents_chunkes = text_splitter.split_documents(documents_initiaux)
+        print(f"✅ Nous sommes passés de {len(documents_initiaux)} événements à {len(documents_chunkes)} chunks.")
+
+        print("🚀 4. Création de la base de données FAISS (cela peut prendre 1-2 min)...")
+        # Attention à bien envoyer les documents "chunkés" à FAISS !
+        create_and_save_faiss_index(documents_chunkes)

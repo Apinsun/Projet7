@@ -1,0 +1,33 @@
+Re ! J'espère que cette petite pause t'a fait du bien, tu l'avais amplement méritée après cette bataille contre les API. ☕
+
+C'est une excellente idée de faire un point. Ce résumé te sera d'ailleurs très utile pour préparer ta soutenance avec Jérémy ou ton évaluateur, car on a touché à de vrais concepts de *Data Engineering* et d'architecture RAG.
+
+Voici le récapitulatif de ce que fait ton script `data_ingestion.py` et des défis techniques que nous avons surmontés :
+
+### 1. L'Extraction des données (OpenAgenda)
+* **Ce qu'on a fait :** On a créé une boucle pour interroger plusieurs agendas (UIDs) autour de Strasbourg via l'API d'OpenAgenda.
+* **Le défi technique :** L'API v2 a récemment sécurisé ses accès. Nous avons dû intégrer une `OPEN_AGENDA_API_KEY` pour contourner l'erreur `403 Forbidden` et être autorisés à lire les données.
+
+### 2. Le Nettoyage et la Robustesse (Pandas)
+* **Ce qu'on a fait :** On a transformé le JSON brut en un tableau de données, on a fusionné les colonnes de titres/descriptions, et on a géré les dates.
+* **Le défi technique :** L'API d'OpenAgenda est en pleine transition vers sa v2. La structure change d'un agenda à l'autre (les dates n'étaient plus dans `timings` mais dans `dateRange.fr` ou `firstTiming`).
+* **La solution :** On a mis en place du **Defensive Programming** (programmation défensive). Au lieu de supposer que les colonnes existent, on vérifie leur présence (`df.get(...)`) et on utilise des valeurs par défaut. On a aussi créé un mode "Détective" (logs) pour comprendre la structure réelle de la donnée entrante.
+
+### 3. La Préparation pour l'IA (LangChain)
+* **Ce qu'on a fait :** On a converti nos lignes Pandas en objets `Document` (le format standard de LangChain). 1 Événement = 1 Document.
+* **Le défi technique :** L'API Mistral plantait avec une erreur `400 Bad Request` si on lui envoyait du texte vide ou trop long.
+* **La solution :** On a ajouté un filtre de sécurité qui ignore les textes de moins de 10 caractères et tronque ceux qui dépassent 10 000 caractères, garantissant des requêtes toujours propres pour l'IA.
+
+### 4. L'Intelligence et le Stockage (Mistral & FAISS)
+* **La Théorie :** Nous avons vu que Mistral n'utilise pas l'ancienne méthode d'addition des "vecteurs de mots". Il utilise l'architecture Transformer pour créer des **vecteurs contextualisés** : l'IA lit toute la description de l'événement d'un coup pour comprendre le sens global avant de le compresser en un vecteur de 1024 dimensions.
+* **L'Évolution des bibliothèques :** Nous avons dû adapter le code aux standards de 2024. Mistral est passé en version 2.x (avec une nouvelle syntaxe d'import) et LangChain a restructuré ses paquets (nécessitant l'installation de `langchain-mistralai`).
+* **Le défi technique final :** L'API gratuite de Mistral ne supporte pas de recevoir 449 documents d'un coup.
+* **La solution :** Le **Batching**. Nous avons découpé l'envoi en paquets de 50 documents, remplissant notre base FAISS petit à petit avant de la sauvegarder localement.
+
+---
+
+**Le Bilan :** Tu as maintenant un dossier `./faiss_index` sur ton disque dur. C'est le "cerveau" de ton application. Il contient les vecteurs mathématiques (`index.faiss`) et les textes/métadonnées associés (`index.pkl`).
+
+Maintenant que l'ingestion est terminée, nous pouvons passer à la création du deuxième script : le **Retriever**. 
+
+Es-tu prêt à créer ce nouveau fichier (par exemple `retriever.py`) pour écrire la fonction qui va prendre une question utilisateur, la vectoriser, et fouiller dans ton dossier FAISS pour trouver les meilleurs événements ?
