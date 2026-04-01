@@ -20,7 +20,7 @@ def format_docs(docs):
 def setup_chatbot():
     embeddings = MistralAIEmbeddings(mistral_api_key=api_key, model="mistral-embed")
     
-    # Chemin vers ton index FAISS
+    # Chemin l'index FAISS
     dossier_src = os.path.dirname(os.path.abspath(__file__))
     racine_projet = os.path.dirname(dossier_src)
     dossier_faiss = os.path.join(racine_projet, "faiss_index")
@@ -34,7 +34,7 @@ def setup_chatbot():
     llm = ChatMistralAI(model="mistral-small", mistral_api_key=api_key)
 
     # 2. PROMPT SYSTÈME
-    template = """Tu es un assistant expert en événements à Strasbourg.
+    template = """Tu es un assistant dans l'évènementiel en Alsace.
     Utilise UNIQUEMENT le contexte suivant pour répondre. Si tu ne sais pas, dis que tu ne trouves rien.
     
     CONTEXTE : {context}
@@ -45,14 +45,13 @@ def setup_chatbot():
     
     prompt = ChatPromptTemplate.from_template(template)
 
-    # 3. LE RETRIEVER (avec ton seuil de similarité)
+    # 3. LE RETRIEVER (avec le seuil de similarité)
     retriever = vectorstore.as_retriever(
         search_type="similarity_score_threshold",
         search_kwargs={"k": 3, "score_threshold": SCORE_SIMILARITE}
     )
 
     # 4. CONSTRUCTION DE LA CHAÎNE (LCEL)
-    # C'est ici qu'on assemble les pièces comme des Lego
     rag_chain = (
         {"context": retriever | format_docs, "question": RunnablePassthrough()}
         | prompt
