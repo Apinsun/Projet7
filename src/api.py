@@ -14,38 +14,43 @@ app = FastAPI(
     version="1.0"
 )
 
-# Chargement du bot au démarrage du serveur
-print("⏳ Chargement du modèle Mistral et de l'index FAISS...")
-# On utilise _, _ pour ignorer le retriever et le prompt dont l'API n'a pas besoin
-bot, _, _ = setup_chatbot() 
-print("✅ Bot prêt à recevoir des requêtes HTTP !")
+# --- CHARGEMENT TOLÉRANT AU DÉMARRAGE ---
+bot = None
+try:
+    print("⏳ Chargement du modèle Mistral et de l'index FAISS...")
+    bot, _, _ = setup_chatbot()
+    print("✅ Bot prêt à recevoir des requêtes HTTP !")
+except Exception as e:
+    print(f"⚠️ AVERTISSEMENT : Impossible de charger la base FAISS ({e}).")
+    print("👉 L'API est démarrée, mais vous devez appeler /rebuild pour initialiser le bot.")
 
-# --- SÉCURITÉ POUR LA ROUTE /REBUILD ---
+
+# --- SÉCURITÉ ---
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=True)
-# On récupère le mot de passe depuis le .env, ou on met une valeur par défaut
 ADMIN_SECRET_KEY = os.getenv("ADMIN_SECRET_KEY", "admin123")
 
 def verify_admin_key(api_key: str = Security(api_key_header)):
-    """Vérifie que la clé fournie dans le header est correcte."""
     if api_key != ADMIN_SECRET_KEY:
-        raise HTTPException(status_code=403, detail="Accès refusé. Clé administrateur invalide.")
+        raise HTTPException(status_code=403, detail="Accès refusé.")
     return api_key
 
-
-# --- MODÈLE DE DONNÉES (Pydantic) ---
 class QuestionRequest(BaseModel):
     question: str
 
-
-# --- ENDPOINT 1 : POSER UNE QUESTION (Public) ---
+# --- ENDPOINT 1 : POSER UNE QUESTION ---
 @app.post("/ask", summary="Poser une question au chatbot")
 async def ask_question(request: QuestionRequest):
-    """Reçoit une question et renvoie la réponse générée par le système RAG."""
+    # On vérifie d'abord si le bot a bien été chargé !
+    if bot is None:
+         raise HTTPException(
+             status_code=503, 
+             detail="Le chatbot n'est pas initialisé (Base FAISS manquante). Lancez d'abord un /rebuild."
+         )
+
     if not request.question.strip():
         raise HTTPException(status_code=400, detail="La question ne peut pas être vide.")
     
     try:
-        # On passe la question au bot LangChain (LCEL)
         reponse = bot.invoke(request.question)
         return {"question": request.question, "answer": reponse}
     except Exception as e:

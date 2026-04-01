@@ -1,0 +1,35 @@
+--- Événement 1 ---
+Titre : Mémoires de Fessenheim, un patrimoine alsacien
+Date : 2025-09-09T10:00:00.000+02:00
+Lieu : Musée Electropolis (Mulhouse)
+Description : À partir du 9 septembre 2025, le Musée Electropolis vous invite à découvrir l’exposition temporaire : « Mémoires de Fessenheim, un patrimoine alsacien ».
+
+
+
+--- Événement 2 ---
+Titre : Fermeture temporaire du musée
+Date : 2024-05-29T10:00:00.000+02:00
+Lieu : Musée du Papier peint (Rixheim)
+Description : Des évolutions importantes sont en cours.
+
+--- Événement 3 ---
+Titre : Exposition "Prendre le temps" - Christiane Fath et François Bauer
+Date : 2026-02-05T18:00:00.000+01:00
+Lieu : La Kunsthalle Mulhouse (Mulhouse)
+Description : Christiane Fath et François Bauer forment à Mulhouse un duo inédit. Le temps de l’exposition, ils s’emparent de toute La Kunsthalle avec une installation immersive.
+
+Q: "Salut, tu aurais des évènements concernant des expositions dans des musés du côté de Mulhouse ?"
+R: "" 
+
+--- Événement 4 ---
+Titre : Pâques en Folie
+Date : 2026-04-01T12:00:00.000+02:00
+Lieu : La Ferme de la Manufacture (Husseren-Wesserling)
+Description : Cette année encore, le Parc de Wesserling fête Pâques ! Pour l’occasion, des milliers d’œufs seront cachés dans le parc de la Ferme !
+
+--- Événement 5 ---
+Titre : L'Écomusée d'Alsace fête Pâques
+Date : 2026-04-03T10:00:00.000+02:00
+Lieu : Écomusée d'Alsace (Gaubiving)
+Description : L'Écomusée d'Alsace fête Pâques ! Savourez l’arrivée du printemps dans le décor authentique de l’Écomusée d’Alsace.
+
