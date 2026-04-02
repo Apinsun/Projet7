@@ -1,0 +1,5 @@
+docker build -t chatbot-alsace .
+-> pour build l'image Docker
+
+docker run -p 8000:8000 --env-file .env chatbot-alsace
+-> pour lancer l'image docker en lui envoyant .env
