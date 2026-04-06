@@ -1,2 +1,4 @@
 .env
 ./memo.txt
+__pycache__/
+*.pyc
