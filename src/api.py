@@ -3,7 +3,7 @@ import subprocess
 from fastapi import FastAPI, HTTPException, Security, Depends
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
-
+from fastapi.responses import JSONResponse
 # Import de la fonction setup_chatbot depuis ton fichier chatbot.py
 from src.chatbot import setup_chatbot
 
@@ -76,3 +76,35 @@ async def rebuild_database():
         return {"status": "success", "message": "Base de données mise à jour et rechargée !"}
     except subprocess.CalledProcessError as e:
         raise HTTPException(status_code=500, detail=f"Erreur lors de la mise à jour : {str(e)}")
+    
+@app.get("/health")
+def health_check():
+    """
+    Vérifie l'état de santé de l'API et de ses dépendances.
+    """
+    
+    status = {
+        "api": "online",
+        "faiss_index": "missing",
+        "mistral_api_key": "missing"
+    }
+
+    # 1. Vérification de la clé API Mistral
+    if os.getenv("MISTRAL_API_KEY"):
+        status["mistral_api_key"] = "ok"
+        
+    # 2. Vérification de la présence de la base FAISS
+    # On reconstruit le chemin absolu vers faiss_index/index.faiss
+    dossier_racine = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    chemin_faiss = os.path.join(dossier_racine, "faiss_index", "index.faiss")
+
+    if os.path.exists(chemin_faiss):
+        status["faiss_index"] = "ok"
+        
+    # 3. Décision finale
+    # Si la base est là et la clé aussi, tout est vert (Code 200)
+    if status["faiss_index"] == "ok" and status["mistral_api_key"] == "ok":
+        return JSONResponse(content=status, status_code=200)
+    # Sinon, l'API tourne mais n'est pas prête à répondre (Code 503)
+    else:
+        return JSONResponse(content=status, status_code=503)

@@ -110,45 +110,88 @@ def process_and_filter_events(all_raw_data):
         print(list(all_raw_data[0].keys()))
         print("-" * 30)
 
+
+
 # 2. GESTION DES TEXTES (Sécurisée)
     # --- Pour le titre ---
-    if 'title.fr' in df.columns:
-        df['titre'] = df['title.fr'].fillna('Titre inconnu')
-    elif 'title' in df.columns:
+    df['titre'] = 'Titre inconnu' # Valeur par défaut pour tout le monde
+    
+    if 'title' in df.columns:
         df['titre'] = df['title'].fillna('Titre inconnu')
-    else:
-        df['titre'] = 'Titre inconnu'
+        
+    if 'title.fr' in df.columns:
+        # On remplace par title.fr là où il y en a, sinon on garde ce qu'on avait trouvé dans 'title'
+        df['titre'] = df['title.fr'].fillna(df['titre'])
 
     # --- Pour la description ---
-    # On commence par la description longue
-    if 'longDescription.fr' in df.columns:
-        df['description'] = df['longDescription.fr']
-    elif 'longDescription' in df.columns:
-        df['description'] = df['longDescription']
-    else:
-        df['description'] = None # On crée la colonne vide
-        
-    # On bouche les trous avec la description courte si elle existe
+    df['description'] = 'Pas de description'
+    
+    if 'description' in df.columns:
+        df['description'] = df['description'].fillna('Pas de description')
     if 'description.fr' in df.columns:
-        df['description'] = df['description'].fillna(df['description.fr'])
-    elif 'description' in df.columns:
-        df['description'] = df['description'].fillna(df['description'])
+        df['description'] = df['description.fr'].fillna(df['description'])
         
-    # S'il y a toujours des trous, on met notre texte par défaut
-    df['description'] = df['description'].fillna('Pas de description')
+    if 'longDescription' in df.columns:
+        df['description'] = df['longDescription'].fillna(df['description'])
+    if 'longDescription.fr' in df.columns:
+        df['description'] = df['longDescription.fr'].fillna(df['description'])
+
+
+
+# 2. GESTION DES TEXTES (Sécurisée)
+    # # --- Pour le titre ---
+    # if 'title.fr' in df.columns:
+    #     df['titre'] = df['title.fr'].fillna('Titre inconnu')
+    # elif 'title' in df.columns:
+    #     df['titre'] = df['title'].fillna('Titre inconnu')
+    # else:
+    #     df['titre'] = 'Titre inconnu'
+
+    # # --- Pour la description ---
+    # # On commence par la description longue
+    # if 'longDescription.fr' in df.columns:
+    #     df['description'] = df['longDescription.fr']
+    # elif 'longDescription' in df.columns:
+    #     df['description'] = df['longDescription']
+    # else:
+    #     df['description'] = None # On crée la colonne vide
+        
+    # # On bouche les trous avec la description courte si elle existe
+    # if 'description.fr' in df.columns:
+    #     df['description'] = df['description'].fillna(df['description.fr'])
+    # elif 'description' in df.columns:
+    #     df['description'] = df['description'].fillna(df['description'])
+        
+    # # S'il y a toujours des trous, on met notre texte par défaut
+    # df['description'] = df['description'].fillna('Pas de description')
 
 
 # 3. GESTION DES DATES (L'API a déjà fait le tri < 1 an, on extrait juste le texte pour Mistral)
+    # if 'firstTiming.begin' in df.columns:
+    #     # Si Pandas a aplati le dictionnaire
+    #     df['date_debut'] = df['firstTiming.begin']
+    # elif 'firstTiming' in df.columns:
+    #     # Si c'est resté un dictionnaire
+    #     df['date_debut'] = df['firstTiming'].apply(lambda x: x.get('begin') if isinstance(x, dict) else x)
+    # elif 'dateRange' in df.columns:
+    #     df['date_debut'] = df['dateRange']
+    # else:
+    #     df['date_debut'] = 'Récemment'
+
+    # 3. GESTION DES DATES (Sécurisée)
+    df['date_debut'] = 'Récemment' # On met la valeur par défaut pour tout le monde
+    
+    if 'dateRange' in df.columns:
+        df['date_debut'] = df['dateRange'].fillna(df['date_debut'])
+        
+    if 'firstTiming' in df.columns:
+        # Si c'est resté un dictionnaire, on extrait prudemment
+        temp_date = df['firstTiming'].apply(lambda x: x.get('begin') if isinstance(x, dict) else x)
+        df['date_debut'] = temp_date.fillna(df['date_debut'])
+        
     if 'firstTiming.begin' in df.columns:
         # Si Pandas a aplati le dictionnaire
-        df['date_debut'] = df['firstTiming.begin']
-    elif 'firstTiming' in df.columns:
-        # Si c'est resté un dictionnaire
-        df['date_debut'] = df['firstTiming'].apply(lambda x: x.get('begin') if isinstance(x, dict) else x)
-    elif 'dateRange' in df.columns:
-        df['date_debut'] = df['dateRange']
-    else:
-        df['date_debut'] = 'Récemment'
+        df['date_debut'] = df['firstTiming.begin'].fillna(df['date_debut'])
 
     # 4. LE FILTRAGE SIMPLE
     nb_avant = len(df)
@@ -160,10 +203,25 @@ def process_and_filter_events(all_raw_data):
     print(f"🗑️ Filtrage de qualité : {nb_avant - nb_apres} événements supprimés.")
     print(f"✅ Reste final : {len(df)} événements récents conservés.")
     
+    # # 5. GESTION DU LIEU (Nom du lieu + Ville)
+    # if 'location.name' in df.columns and 'location.city' in df.columns:
+    #     # On combine le nom de la salle et la ville : "Le Zénith (Strasbourg)"
+    #     df['lieu'] = df['location.name'].fillna('') + " (" + df['location.city'].fillna('') + ")"
+    # elif 'location.city' in df.columns:
+    #     df['lieu'] = df['location.city']
+    # else:
+    #     df['lieu'] = "Alsace"
+
+
     # 5. GESTION DU LIEU (Nom du lieu + Ville)
     if 'location.name' in df.columns and 'location.city' in df.columns:
-        # On combine le nom de la salle et la ville : "Le Zénith (Strasbourg)"
-        df['lieu'] = df['location.name'].fillna('') + " (" + df['location.city'].fillna('') + ")"
+        # On utilise 'apply' pour regarder chaque ligne individuellement
+        df['lieu'] = df.apply(
+            lambda row: f"{row['location.name']} ({row['location.city']})" 
+            if pd.notna(row['location.name']) and row['location.name'] != '' 
+            else row['location.city'], 
+            axis=1
+        )
     elif 'location.city' in df.columns:
         df['lieu'] = df['location.city']
     else:
