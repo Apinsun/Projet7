@@ -227,6 +227,13 @@ def process_and_filter_events(all_raw_data):
     else:
         df['lieu'] = "Alsace"
 
+# 6. LE FILTRAGE GÉOGRAPHIQUE STRICT (Adieu la Haute-Savoie !)
+    villes_autorisees = ["Strasbourg", "Colmar", "Mulhouse", "Sélestat", "Haguenau"]
+    if 'location.city' in df.columns:
+        df = df[df['location.city'].isin(villes_autorisees)]
+        
+    print(f"🌍 Reste après filtrage géographique strict : {len(df)} événements.")
+
     return df
 
 def get_mistral_embeddings(textes):

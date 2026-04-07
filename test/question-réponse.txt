@@ -33,3 +33,6 @@ Date : 2026-04-03T10:00:00.000+02:00
 Lieu : Écomusée d'Alsace (Gaubiving)
 Description : L'Écomusée d'Alsace fête Pâques ! Savourez l’arrivée du printemps dans le décor authentique de l’Écomusée d’Alsace.
 
+Question : "Est-ce qu'il y a des rencontres littéraires ou des auteurs invités à la librairie Kléber prochainement ?"
+
+Ground Truth (Ce qu'on attend du bot) : "Oui, la librairie Kléber prévoit plusieurs rencontres. Il y aura un café littéraire avec Aude Cirier le 28 juin 2025, une rencontre avec Simone Morgenthaler le 31 octobre 2025, et Benjamin de Laforcade viendra présenter son livre 'Woody' le 25 avril 2026."

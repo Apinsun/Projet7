@@ -7,11 +7,16 @@ from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
+from datetime import datetime
+import locale
 
 # 1. Configuration
 load_dotenv()
 api_key = os.getenv("MISTRAL_API_KEY")
 SCORE_SIMILARITE = 0.4
+# Force la date en FR
+locale.setlocale(locale.LC_TIME, 'fr_FR.UTF-8')
+
 
 def format_docs(docs):
     """Combine les contenus des documents trouvés en une seule chaîne."""
@@ -19,7 +24,7 @@ def format_docs(docs):
 
 def setup_chatbot():
     embeddings = MistralAIEmbeddings(mistral_api_key=api_key, model="mistral-embed")
-    
+
     # Chemin l'index FAISS
     dossier_src = os.path.dirname(os.path.abspath(__file__))
     racine_projet = os.path.dirname(dossier_src)
@@ -36,6 +41,7 @@ def setup_chatbot():
     # 2. PROMPT SYSTÈME
     template = """Tu es un assistant dans l'évènementiel en Alsace.
     Utilise UNIQUEMENT le contexte suivant pour répondre. Si tu ne sais pas, dis que tu ne trouves rien.
+    INFORMATION IMPORTANTE : Aujourd'hui, nous sommes le {date_du_jour}.
     
     CONTEXTE : {context}
     
@@ -53,7 +59,9 @@ def setup_chatbot():
 
     # 4. CONSTRUCTION DE LA CHAÎNE (LCEL)
     rag_chain = (
-        {"context": retriever | format_docs, "question": RunnablePassthrough()}
+        {"context": retriever | format_docs,
+          "question": RunnablePassthrough(),
+          "date_du_jour": lambda _: datetime.now().strftime("%A %d %B %Y à %Hh%M")}
         | prompt
         | llm
         | StrOutputParser()
